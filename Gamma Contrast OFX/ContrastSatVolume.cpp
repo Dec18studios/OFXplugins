@@ -17,7 +17,7 @@
 
 // Plugin metadata - defines what the plugin is called and how it appears in hosts
 #define kPluginName "Contrast Sat Volume"
-#define kPluginGrouping "Greg Enright"
+#define kPluginGrouping "create@Dec18Studios.com"
 #define kPluginDescription "Apply seperate RGB and CYM Contrast Adjustments to each channel"
 #define kPluginIdentifier "com.OpenFXSample.ContrastSatVolume"
 #define kPluginVersionMajor 1
@@ -414,6 +414,9 @@ private:
 
     // Blend Mode dropdown
     OFX::ChoiceParam* m_BlendMode;               // Blend mode (Primary, Secondary, Blend Control)
+    
+    // Buy Me a Coffee button
+    OFX::PushButtonParam* m_CoffeeButton;        // Coffee support button
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -462,6 +465,9 @@ ContrastSatVolume::ContrastSatVolume(OfxImageEffectHandle p_Handle)
 
     // Blend mode parameter
     m_BlendMode = fetchChoiceParam("blendMode");
+    
+    // Buy Me a Coffee button
+    m_CoffeeButton = fetchPushButtonParam("buymeacoffee");
 
     // Set the initial enabledness of our UI controls
     setEnabledness();
@@ -553,6 +559,21 @@ void ContrastSatVolume::changedParam(const OFX::InstanceChangedArgs& p_Args, con
     if (p_ParamName == "GangRGB" || p_ParamName == "GangCYM")
     {
         setEnabledness();
+    }
+    else if (p_ParamName == "buymeacoffee")
+    {
+        // Open Buy Me a Coffee link
+        std::string url = "https://www.dec18studios.com/coffee"; // Replace with Greg's actual URL
+        
+#ifdef __APPLE__
+        std::string command = "open \"" + url + "\"";
+#elif defined(_WIN32)
+        std::string command = "start \"\" \"" + url + "\"";
+#else
+        std::string command = "xdg-open \"" + url + "\"";
+#endif
+        
+        system(command.c_str());
     }
 }
 
@@ -1016,6 +1037,12 @@ void ContrastSatVolumeFactory::describeInContext(OFX::ImageEffectDescriptor& p_D
     page->addChild(*param);
     param = defineMidgreyParam(p_Desc, "scaleMidGreyY", "Yellow Mid Grey", "Midgrey pivot point for Yellow gamma", BlueYellowGroup, false);
     page->addChild(*param);
+
+    // ADD: Buy Me a Coffee button at the end
+    PushButtonParamDescriptor* coffeeButton = p_Desc.definePushButtonParam("buymeacoffee");
+    coffeeButton->setLabel("☕ Buy Me a Coffee");
+    coffeeButton->setHint("Support the developer - opens external link to Buy Me a Coffee");
+    page->addChild(*coffeeButton);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
