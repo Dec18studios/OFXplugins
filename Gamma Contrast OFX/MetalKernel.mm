@@ -53,7 +53,7 @@ const char* kernelSource =  \
 "       float finalB = yAdjusted + (bAdjusted - yAdjusted) * tiltBY;                                                                                 \n" \
 "                                                                                                                                                    \n" \
 "       // Clamp and output                                                                                                                          \n" \
-"       p_Output[index + 0] = clamp(1.0f, 0.0f, 1.0f);                                                                                             \n" \
+"       p_Output[index + 0] = clamp(finalR, 0.0f, 1.0f);                                                                                             \n" \
 "       p_Output[index + 1] = clamp(finalG, 0.0f, 1.0f);                                                                                             \n" \
 "       p_Output[index + 2] = clamp(finalB, 0.0f, 1.0f);                                                                                             \n" \
 "       p_Output[index + 3] = a;                                                                                                                      \n" \
@@ -165,6 +165,9 @@ void RunComplexMetalKernel(void* p_CmdQ, int p_Width, int p_Height,
 
     [computeEncoder endEncoding];
     [commandBuffer commit];
+    
+    // Wait for completion before releasing buffers
+    [commandBuffer waitUntilCompleted];
     
     // Release the temporary buffers
     [rgbGammasBuf release];
