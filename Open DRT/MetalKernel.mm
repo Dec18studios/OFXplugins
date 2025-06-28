@@ -755,6 +755,13 @@ const char* kernelSource =  \
 "        }\n" \
 "        \n" \
 "        /***************************************************\n" \
+"          Hue Angle Premultiplication (MISSING STEP ADDED)\n" \
+"        --------------------------------------------------*/\n" \
+"        // Premult hue angles for Hue Contrast and Hue Shift (matches DCTL implementation)\n" \
+"        ha_rgb *= ach_d;\n" \
+"        ha_cmy *= (1.5f)*compress_toe_quadratic(ach_d, 0.5f, 0); // Stronger smoothing for CMY hue shift\n" \
+"        \n" \
+"        /***************************************************\n" \
 "          Hue Contrast R\n" \
 "        --------------------------------------------------*/\n" \
 "        if (params.hcPresetEnable || params.hcUIEnable) {\n" \
