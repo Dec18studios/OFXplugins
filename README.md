@@ -1,3 +1,6 @@
 You can build your own versions or just use the built ones...
 FYI they were built for Apple Silicon.   If you ask nicely I can try to figure out how to make for windows....
 but no guarrentees
+
+Learn more at Dec18studios.com
+Tutorials at https://www.youtube.com/channel/UC5QtdUrBcSldLdF-LJhXm-g/
