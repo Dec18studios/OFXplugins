@@ -1823,7 +1823,7 @@ page->addChild(*tonescalePresetParam);
     page->addChild(*param);
 
     param = defineDoubleParam(p_Desc, "_hs_y", "Hueshift Y", "Yellow hue shifting", 
-                             hueshiftCmyGroup, 0.600, -1.0, 1.0, 0.001);
+                             hueshiftCmyGroup, 0.200, -1.0, 1.0, 0.001);
     page->addChild(*param);
 
     // Hue Contrast Enable + Lock
