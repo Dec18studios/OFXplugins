@@ -58,6 +58,14 @@ const char* kernelSource =  \
 "    float hsM;\n" \
 "    float hsY;\n" \
 "    float hcR;\n" \
+"    // Advanced Hue Contrast Parameters\n" \
+"    float advHcR;\n" \
+"    float advHcG;\n" \
+"    float advHcB;\n" \
+"    float advHcC;\n" \
+"    float advHcM;\n" \
+"    float advHcY;\n" \
+"    float advHcPower;\n" \
 "    // NEW PARAMETERS - Filmic Mode and Advanced Controls\n" \
 "    int filmicMode;\n" \
 "    float filmicDynamicRange;\n" \
@@ -223,6 +231,10 @@ const char* kernelSource =  \
 "        return x > y1 ? (x - y1) / k1 + x1 : pow((x - o) / s0, 1.0f / p);\n" \
 "    else\n" \
 "        return x > x1 ? k1 * (x - x1) + y1 : s0 * pow(x, p) + o;\n" \
+"}\n" \
+"\n" \
+"float gamma_contrast(float x, float gamma, float mid_gray) {\n" \
+"    return mid_gray * pow(max(0.0f, x / mid_gray), gamma);\n" \
 "}\n" \
 "\n" \
 "float gauss_window(float x, float w) {\n" \
@@ -770,6 +782,27 @@ const char* kernelSource =  \
 "            if (params.tonescaleMap == 1) crv_val = contrast_high(crv_val, hcon_p, params.tnHconPv, params.tnHconSt, 0);\n" \
 "        }\n" \
 "        /***************************************************\n" \
+"          Apply Advanced Contrast\n" \
+"        --------------------------------------------------*/\n" \
+"        if (params.advHueContrast == 1) {\n" \
+"            float3 cym_contrast = 1.0f - rgb;\n" \
+"            float3 rgb_contrast = rgb;\n" \
+"            float pivot = 1.0f;\n" \
+"            rgb_contrast.x = gamma_contrast(rgb_contrast.x, params.advHcR, pivot);\n" \
+"            cym_contrast.x = gamma_contrast(cym_contrast.x, params.advHcC, pivot);\n" \
+"            rgb_contrast.y = gamma_contrast(rgb_contrast.y, params.advHcG, pivot);\n" \
+"            cym_contrast.y = gamma_contrast(cym_contrast.y, params.advHcM, pivot);\n" \
+"            rgb_contrast.z = gamma_contrast(rgb_contrast.z, params.advHcB, pivot);\n" \
+"            cym_contrast.z = gamma_contrast(cym_contrast.z, params.advHcY, pivot);\n" \
+"            \n" \
+"            rgb_contrast.x = mix(rgb_contrast.x, 1.0f - cym_contrast.x, 0.5f);\n" \
+"            rgb_contrast.y = mix(rgb_contrast.y, 1.0f - cym_contrast.y, 0.5f);\n" \
+"            rgb_contrast.z = mix(rgb_contrast.z, 1.0f - cym_contrast.z, 0.5f);\n" \
+"            \n" \
+"            rgb = mix(rgb, rgb_contrast, params.advHcPower);\n" \
+"        }\n" \
+"        \n" \
+"        /***************************************************\n" \
 "          Apply Tonescale\n" \
 "        --------------------------------------------------*/\n" \
 "        tsn = compress_hyperbolic_power(tsn, params.ts_s, params.tnCon);\n" \
@@ -1076,6 +1109,8 @@ OpenDRTParams createOpenDRTParams(
     float p_HsR, float p_HsG, float p_HsB, float p_HsRgbRng,
     float p_HsC, float p_HsM, float p_HsY,
     float p_HcR,
+    // Advanced Hue Contrast Parameters
+    float p_AdvHcR, float p_AdvHcG, float p_AdvHcB, float p_AdvHcC, float p_AdvHcM, float p_AdvHcY, float p_AdvHcPower,
     // NEW PARAMETERS - Filmic Mode and Advanced Controls
     bool p_FilmicMode, float p_FilmicDynamicRange, int p_FilmicProjectorSim,
     float p_FilmicSourceStops, float p_FilmicTargetStops, float p_FilmicStrength,
@@ -1155,6 +1190,15 @@ OpenDRTParams createOpenDRTParams(
     
     // Hue Contrast Parameters
     params.hcR = p_HcR;
+    
+    // Advanced Hue Contrast Parameters
+    params.advHcR = p_AdvHcR;
+    params.advHcG = p_AdvHcG;
+    params.advHcB = p_AdvHcB;
+    params.advHcC = p_AdvHcC;
+    params.advHcM = p_AdvHcM;
+    params.advHcY = p_AdvHcY;
+    params.advHcPower = p_AdvHcPower;
     
     // NEW PARAMETERS - Filmic Mode and Advanced Controls
     params.filmicMode = p_FilmicMode ? 1 : 0;
@@ -1302,6 +1346,8 @@ void OpenDRTKernel(void* p_CmdQ, int p_Width, int p_Height,
                    float p_HsR, float p_HsG, float p_HsB, float p_HsRgbRng,
                    float p_HsC, float p_HsM, float p_HsY,
                    float p_HcR,
+                   // Advanced Hue Contrast Parameters
+                   float p_AdvHcR, float p_AdvHcG, float p_AdvHcB, float p_AdvHcC, float p_AdvHcM, float p_AdvHcY, float p_AdvHcPower,
                    // NEW PARAMETERS - Filmic Mode and Advanced Controls
                    bool p_FilmicMode, float p_FilmicDynamicRange, int p_FilmicProjectorSim,
                    float p_FilmicSourceStops, float p_FilmicTargetStops, float p_FilmicStrength,
@@ -1382,6 +1428,8 @@ void OpenDRTKernel(void* p_CmdQ, int p_Width, int p_Height,
         p_HsR, p_HsG, p_HsB, p_HsRgbRng,  // ADD ENABLE
         p_HsC, p_HsM, p_HsY,  // ADD ENABLE
         p_HcR,  // ADD ENABLE
+        // Advanced Hue Contrast Parameters
+        p_AdvHcR, p_AdvHcG, p_AdvHcB, p_AdvHcC, p_AdvHcM, p_AdvHcY, p_AdvHcPower,
         // NEW PARAMETERS - Filmic Mode and Advanced Controls
         p_FilmicMode, p_FilmicDynamicRange, p_FilmicProjectorSim,
         p_FilmicSourceStops, p_FilmicTargetStops, p_FilmicStrength,

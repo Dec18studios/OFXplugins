@@ -5,6 +5,17 @@
 #include "MatrixManager.h"   // Include matrix manager
 
 #include <stdio.h>
+#include <stdexcept>
+
+// CUDA headers for error checking (only when USE_CUDA is defined)
+#ifdef USE_CUDA
+#include <cuda_runtime.h>
+#endif
+
+// OpenCL headers for error checking (only when USE_OPENCL is defined)  
+#ifdef USE_OPENCL
+#include <CL/cl.h>
+#endif
 
 // Add using directive to avoid namespace qualifiers
 using namespace OpenDRTPresets;
@@ -94,6 +105,8 @@ public:
         bool p_FilmicMode, float p_FilmicDynamicRange, int p_FilmicProjectorSim,
         float p_FilmicSourceStops, float p_FilmicTargetStops, float p_FilmicStrength,
         bool p_AdvHueContrast, bool p_TonescaleMap, bool p_DiagnosticsMode, bool p_RgbChipsMode, bool p_BetaFeaturesEnable,
+        // Advanced Hue Contrast Parameters
+        float p_AdvHcR, float p_AdvHcG, float p_AdvHcB, float p_AdvHcC, float p_AdvHcM, float p_AdvHcY, float p_AdvHcPower,
         // Display Parameters
         int p_DisplayGamut, int p_Eotf,
         // Current preset index to look up enables
@@ -168,6 +181,8 @@ extern void OpenDRTKernel(void* p_CmdQ, int p_Width, int p_Height,
                           float p_HsR, float p_HsG, float p_HsB, float p_HsRgbRng,
                           float p_HsC, float p_HsM, float p_HsY,
                           float p_HcR,
+                          // Advanced Hue Contrast Parameters
+                          float p_AdvHcR, float p_AdvHcG, float p_AdvHcB, float p_AdvHcC, float p_AdvHcM, float p_AdvHcY, float p_AdvHcPower,
                           // NEW PARAMETERS - Filmic Mode and Advanced Controls
                           bool p_FilmicMode, float p_FilmicDynamicRange, int p_FilmicProjectorSim,
                           float p_FilmicSourceStops, float p_FilmicTargetStops, float p_FilmicStrength,
@@ -249,6 +264,8 @@ void ImageProcessor::processImagesMetal()
                   _params.hsR, _params.hsG, _params.hsB, _params.hsRgbRng,
                   _params.hsC, _params.hsM, _params.hsY,
                   _params.hcR,
+                  // Advanced Hue Contrast Parameters
+                  _params.advHcR, _params.advHcG, _params.advHcB, _params.advHcC, _params.advHcM, _params.advHcY, _params.advHcPower,
                   // NEW PARAMETERS - Filmic Mode and Advanced Controls
                   (_params.filmicMode != 0), _params.filmicDynamicRange, _params.filmicProjectorSim,
                   _params.filmicSourceStops, _params.filmicTargetStops, _params.filmicStrength,
@@ -259,6 +276,7 @@ void ImageProcessor::processImagesMetal()
 
 void ImageProcessor::processImagesOpenCL()
 {
+#ifndef __APPLE__
     const OfxRectI& bounds = _srcImg->getBounds();
     const int width = bounds.x2 - bounds.x1;
     const int height = bounds.y2 - bounds.y1;
@@ -268,6 +286,7 @@ void ImageProcessor::processImagesOpenCL()
 
     // Replace with your own kernel call:
     RunOpenCLKernel(_pOpenCLCmdQ, width, height, input, output);
+#endif
 }
 
 // BOILERPLATE: CPU fallback processing
@@ -351,6 +370,8 @@ void ImageProcessor::setOpenDRTParams(
     bool p_FilmicMode, float p_FilmicDynamicRange, int p_FilmicProjectorSim,
     float p_FilmicSourceStops, float p_FilmicTargetStops, float p_FilmicStrength,
     bool p_AdvHueContrast, bool p_TonescaleMap, bool p_DiagnosticsMode, bool p_RgbChipsMode, bool p_BetaFeaturesEnable,
+    // Advanced Hue Contrast Parameters
+    float p_AdvHcR, float p_AdvHcG, float p_AdvHcB, float p_AdvHcC, float p_AdvHcM, float p_AdvHcY, float p_AdvHcPower,
     // Display Parameters
     int p_DisplayGamut, int p_Eotf,
     // Current preset index to look up enables
@@ -449,6 +470,15 @@ _params.cwp = final_cwp; // Now guaranteed to be 0-3
     _params.hsM = p_HsM;
     _params.hsY = p_HsY;
     _params.hcR = p_HcR;
+    
+    // NEW PARAMETERS - Advanced Hue Contrast
+    _params.advHcR = p_AdvHcR;
+    _params.advHcG = p_AdvHcG;
+    _params.advHcB = p_AdvHcB;
+    _params.advHcC = p_AdvHcC;
+    _params.advHcM = p_AdvHcM;
+    _params.advHcY = p_AdvHcY;
+    _params.advHcPower = p_AdvHcPower;
     
     // NEW PARAMETERS - Filmic Mode and Advanced Controls
     _params.filmicMode = p_FilmicMode ? 1 : 0;
@@ -618,11 +648,13 @@ private:
     OFX::DoubleParam* m_HcR;           // Hue Contrast R
     
     // Advanced Hue Contrast Parameters
+    OFX::DoubleParam* m_AdvHcR;        // Advanced Hue Contrast R (separate from basic Hue Contrast R)
     OFX::DoubleParam* m_AdvHcG;        // Advanced Hue Contrast G
     OFX::DoubleParam* m_AdvHcB;        // Advanced Hue Contrast B
     OFX::DoubleParam* m_AdvHcC;        // Advanced Hue Contrast C
     OFX::DoubleParam* m_AdvHcM;        // Advanced Hue Contrast M
     OFX::DoubleParam* m_AdvHcY;        // Advanced Hue Contrast Y
+    OFX::DoubleParam* m_AdvHcPower;    // Advanced Hue Contrast Power Strength
     
     // Display Parameters
     OFX::ChoiceParam* m_DisplayGamut;  // Display Gamut
@@ -784,11 +816,13 @@ OpenDRT::OpenDRT(OfxImageEffectHandle p_Handle)
     m_HcR = fetchDoubleParam("_hc_r");
     
     // Advanced Hue Contrast Parameters
+    m_AdvHcR = fetchDoubleParam("_adv_hc_r");
     m_AdvHcG = fetchDoubleParam("_adv_hc_g");
     m_AdvHcB = fetchDoubleParam("_adv_hc_b");
     m_AdvHcC = fetchDoubleParam("_adv_hc_c");
     m_AdvHcM = fetchDoubleParam("_adv_hc_m");
     m_AdvHcY = fetchDoubleParam("_adv_hc_y");
+    m_AdvHcPower = fetchDoubleParam("_adv_hc_power");
     
     // NEW PARAMETERS - Filmic Mode and Advanced Controls
     m_FilmicMode = fetchBooleanParam("_filmic_mode");
@@ -1275,6 +1309,13 @@ void OpenDRT::setupAndProcess(ImageProcessor& p_Processor, const OFX::RenderArgu
     
     // Advanced Hue Contrast Parameters
     bool advHueContrast = m_AdvHueContrast->getValueAtTime(p_Args.time);
+    float advHcR = m_AdvHcR->getValueAtTime(p_Args.time);
+    float advHcG = m_AdvHcG->getValueAtTime(p_Args.time);
+    float advHcB = m_AdvHcB->getValueAtTime(p_Args.time);
+    float advHcC = m_AdvHcC->getValueAtTime(p_Args.time);
+    float advHcM = m_AdvHcM->getValueAtTime(p_Args.time);
+    float advHcY = m_AdvHcY->getValueAtTime(p_Args.time);
+    float advHcPower = m_AdvHcPower->getValueAtTime(p_Args.time);
     
     // Tonescale Map Parameters
     bool tonescaleMap = m_TonescaleMap->getValueAtTime(p_Args.time);
@@ -1336,6 +1377,8 @@ void OpenDRT::setupAndProcess(ImageProcessor& p_Processor, const OFX::RenderArgu
         filmicMode, filmicDynamicRange, filmicProjectorSim,
         filmicSourceStops, filmicTargetStops, filmicStrength,
         advHueContrast, tonescaleMap, diagnosticsMode, rgbChipsMode, betaFeaturesEnable,
+        // Advanced Hue Contrast Parameters
+        advHcR, advHcG, advHcB, advHcC, advHcM, advHcY, advHcPower,
         // Display Parameters
         displayGamut, eotf,
         // Look Preset
@@ -1418,8 +1461,8 @@ void OpenDRTFactory::describe(OFX::ImageEffectDescriptor& p_Desc)
     p_Desc.setSupportsMultipleClipPARs(kSupportsMultipleClipPARs);
 
     // GPU support flags
-    p_Desc.setSupportsOpenCLRender(true);
 #ifndef __APPLE__
+    p_Desc.setSupportsOpenCLRender(true);
     p_Desc.setSupportsCudaRender(true);
     p_Desc.setSupportsCudaStream(true);
 #endif
@@ -2071,24 +2114,34 @@ page->addChild(*tonescalePresetParam);
     ////////////////////////////////////////////////////////////////////////////////
     
     // Advanced Hue Contrast Parameters (in Advanced Hue Contrast group)
-    param = defineDoubleParam(p_Desc, "_adv_hc_g", "Advanced Hue Contrast G", "Green advanced hue contrast adjustment", 
-                             advHueContrastGroup, 0.0, -1.0, 1.0, 0.001);
+    // Red parameter that is separate from the basic Hue Contrast R
+    param = defineDoubleParam(p_Desc, "_adv_hc_r", "Red Contrast", "Advanced red hue contrast adjustment", 
+                             advHueContrastGroup, 1.0, 0.1, 4.0, 0.01);
     page->addChild(*param);
     
-    param = defineDoubleParam(p_Desc, "_adv_hc_b", "Advanced Hue Contrast B", "Blue advanced hue contrast adjustment", 
-                             advHueContrastGroup, 0.0, -1.0, 1.0, 0.001);
+    param = defineDoubleParam(p_Desc, "_adv_hc_g", "Green Contrast", "Green hue contrast adjustment", 
+                             advHueContrastGroup, 1.0, 0.1, 4.0, 0.01);
     page->addChild(*param);
     
-    param = defineDoubleParam(p_Desc, "_adv_hc_c", "Advanced Hue Contrast C", "Cyan advanced hue contrast adjustment", 
-                             advHueContrastGroup, 0.0, -1.0, 1.0, 0.001);
+    param = defineDoubleParam(p_Desc, "_adv_hc_b", "Blue Contrast", "Blue hue contrast adjustment", 
+                             advHueContrastGroup, 1.0, 0.1, 4.0, 0.01);
     page->addChild(*param);
     
-    param = defineDoubleParam(p_Desc, "_adv_hc_m", "Advanced Hue Contrast M", "Magenta advanced hue contrast adjustment", 
-                             advHueContrastGroup, 0.0, -1.0, 1.0, 0.001);
+    param = defineDoubleParam(p_Desc, "_adv_hc_c", "Cyan Contrast", "Cyan hue contrast adjustment", 
+                             advHueContrastGroup, 1.0, 0.1, 4.0, 0.01);
     page->addChild(*param);
     
-    param = defineDoubleParam(p_Desc, "_adv_hc_y", "Advanced Hue Contrast Y", "Yellow advanced hue contrast adjustment", 
-                             advHueContrastGroup, 0.0, -1.0, 1.0, 0.001);
+    param = defineDoubleParam(p_Desc, "_adv_hc_m", "Magenta Contrast", "Magenta hue contrast adjustment", 
+                             advHueContrastGroup, 1.0, 0.1, 4.0, 0.01);
+    page->addChild(*param);
+    
+    param = defineDoubleParam(p_Desc, "_adv_hc_y", "Yellow Contrast", "Yellow hue contrast adjustment", 
+                             advHueContrastGroup, 1.0, 0.1, 4.0, 0.01);
+    page->addChild(*param);
+    
+    // Power Strength slider for blending
+    param = defineDoubleParam(p_Desc, "_adv_hc_power", "Power Strength", "Blends between adjusted and unadjusted result. 1.0 = full effect, 0.0 = no effect", 
+                             advHueContrastGroup, 1.0, 0.0, 1.0, 0.01);
     page->addChild(*param);
 
     ////////////////////////////////////////////////////////////////////////////////

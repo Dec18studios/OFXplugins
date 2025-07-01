@@ -15,35 +15,38 @@ ifeq ($(UNAME_SYSTEM), Linux)
     BUNDLE_DIR = OpenDRT.ofx.bundle/Contents/Linux-x86-64/
     CUDA_OBJ = CudaKernel.o
     METAL_OBJ = 
+    OPENCL_OBJ = OpenCLKernel.o
 else
     ARCH_FLAGS = -arch arm64 -arch x86_64
     CXXFLAGS += ${ARCH_FLAGS}
     LDFLAGS = -bundle -fvisibility=hidden -F/Library/Frameworks -framework OpenCL -framework Metal -framework AppKit
     LDFLAGS += ${ARCH_FLAGS}
     BUNDLE_DIR = OpenDRT.ofx.bundle/Contents/MacOS/
-    CUDA_OBJ = CudaKernel.o
+    CUDA_OBJ = 
     METAL_OBJ = MetalKernel.o
+    OPENCL_OBJ = 
 endif
 
-OpenDRT.ofx: OpenDRT.o MatrixManager.o SimpleJSON.o ${CUDA_OBJ} $(METAL_OBJ) OpenCLKernel.o ofxsCore.o ofxsImageEffect.o ofxsInteract.o ofxsLog.o ofxsMultiThread.o ofxsParams.o ofxsProperty.o ofxsPropertyValidation.o
+OpenDRT.ofx: OpenDRT.o MatrixManager.o SimpleJSON.o ${CUDA_OBJ} $(METAL_OBJ) $(OPENCL_OBJ) ofxsCore.o ofxsImageEffect.o ofxsInteract.o ofxsLog.o ofxsMultiThread.o ofxsParams.o ofxsProperty.o ofxsPropertyValidation.o
 	$(CXX) $^ -o $@ $(LDFLAGS)
 	mkdir -p $(BUNDLE_DIR)
 	cp OpenDRT.ofx $(BUNDLE_DIR)
 	cp ColorMatrices.json $(BUNDLE_DIR)
 
-# Platform-specific CUDA compilation
+# Platform-specific CUDA compilation (Linux only)
 ifeq ($(UNAME_SYSTEM), Linux)
 CudaKernel.o: CudaKernel.cu
 	${NVCC} -c $< $(NVCCFLAGS)
-else
-CudaKernel.o: CudaKernel.cu
-	cp CudaKernel.cu CudaKernel_mac.cpp
-	$(CXX) -c CudaKernel_mac.cpp -o CudaKernel.o $(CXXFLAGS) -D__APPLE__ -D__MACH__
-	rm CudaKernel_mac.cpp
+
+OpenCLKernel.o: OpenCLKernel.cpp
+	$(CXX) -c $< $(CXXFLAGS)
 endif
 
+# macOS Metal compilation only
+ifneq ($(UNAME_SYSTEM), Linux)
 MetalKernel.o: MetalKernel.mm
 	$(CXX) -c $< $(CXXFLAGS)
+endif
 
 MatrixManager.o: MatrixManager.cpp MatrixManager.h
 	$(CXX) -c $< $(CXXFLAGS)

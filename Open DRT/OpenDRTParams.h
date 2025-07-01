@@ -64,6 +64,15 @@ struct OpenDRTParams {
     // Hue Contrast Parameters
     float hcR;            // Hue Contrast R
     
+    // Advanced Hue Contrast Parameters
+    float advHcR;         // Advanced Hue Contrast R (Red Contrast)
+    float advHcG;         // Advanced Hue Contrast G (Green Contrast)
+    float advHcB;         // Advanced Hue Contrast B (Blue Contrast)
+    float advHcC;         // Advanced Hue Contrast C (Cyan Contrast)
+    float advHcM;         // Advanced Hue Contrast M (Magenta Contrast)
+    float advHcY;         // Advanced Hue Contrast Y (Yellow Contrast)
+    float advHcPower;     // Advanced Hue Contrast Power Strength
+    
     // NEW PARAMETERS - Filmic Mode and Advanced Controls
     int filmicMode;       // Enable Filmic Mode (bool converted to int)
     float filmicDynamicRange; // Filmic Dynamic Range
