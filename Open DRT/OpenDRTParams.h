@@ -64,6 +64,19 @@ struct OpenDRTParams {
     // Hue Contrast Parameters
     float hcR;            // Hue Contrast R
     
+    // NEW PARAMETERS - Filmic Mode and Advanced Controls
+    int filmicMode;       // Enable Filmic Mode (bool converted to int)
+    float filmicDynamicRange; // Filmic Dynamic Range
+    int filmicProjectorSim;   // Filmic Projector Simulation
+    float filmicSourceStops;  // Original Camera Range
+    float filmicTargetStops;  // Target Film Range
+    float filmicStrength;     // Filmic Strength
+    int advHueContrast;   // Advanced Hue Contrast (bool converted to int)
+    int tonescaleMap;     // Tonescale Map (bool converted to int)
+    int diagnosticsMode;  // Diagnostics Mode (bool converted to int)
+    int rgbChipsMode;     // RGB Chips Mode (bool converted to int)
+    int betaFeaturesEnable; // Beta Features Enable (bool converted to int)
+    
     // Display Parameters
     int displayGamut;     // Display Gamut
     int eotf;             // Display EOTF

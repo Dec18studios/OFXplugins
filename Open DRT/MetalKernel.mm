@@ -58,6 +58,18 @@ const char* kernelSource =  \
 "    float hsM;\n" \
 "    float hsY;\n" \
 "    float hcR;\n" \
+"    // NEW PARAMETERS - Filmic Mode and Advanced Controls\n" \
+"    int filmicMode;\n" \
+"    float filmicDynamicRange;\n" \
+"    int filmicProjectorSim;\n" \
+"    float filmicSourceStops;\n" \
+"    float filmicTargetStops;\n" \
+"    float filmicStrength;\n" \
+"    int advHueContrast;\n" \
+"    int tonescaleMap;\n" \
+"    int diagnosticsMode;\n" \
+"    int rgbChipsMode;\n" \
+"    int betaFeaturesEnable;\n" \
 "    int displayGamut;\n" \
 "    int eotf;\n" \
 "    // Matrix data (3x3 = 9 floats each)\n" \
@@ -593,6 +605,30 @@ const char* kernelSource =  \
 "        float3 rgb = float3(p_Input[index + 0], p_Input[index + 1], p_Input[index + 2]);\n" \
 "        float a = p_Input[index + 3];\n" \
 "        \n" \
+"        // If diagnostics mode is enabled and in ramp area, set input to ramp value\n" \
+"        if (params.diagnosticsMode == 1 && id.y < 100) {\n" \
+"            float ramp = (float)id.x / (float)(p_Width - 1);\n" \
+"            rgb = float3(ramp, ramp, ramp);\n" \
+"        }\n" \
+"        \n" \
+"        // If RGB chips mode is enabled, create RGB test pattern\n" \
+"        if (params.rgbChipsMode == 1) {\n" \
+"            float ramp = (float)id.x / (float)(p_Width - 1);\n" \
+"            int band = id.y * 7 / p_Height;\n" \
+"            \n" \
+"            switch (band) {\n" \
+"                case 0: rgb = float3(ramp, 0.0f, 0.0f); break;     // Red\n" \
+"                case 1: rgb = float3(ramp, ramp, 0.0f); break;     // Yellow\n" \
+"                case 2: rgb = float3(0.0f, ramp, 0.0f); break;     // Green\n" \
+"                case 3: rgb = float3(0.0f, ramp, ramp); break;     // Cyan\n" \
+"                case 4: rgb = float3(0.0f, 0.0f, ramp); break;     // Blue\n" \
+"                case 5: rgb = float3(ramp, 0.0f, ramp); break;     // Magenta\n" \
+"                case 6: rgb = float3(ramp, ramp, ramp); break;    // White/Gray\n" \
+"                default: rgb = float3(ramp, ramp, ramp); break;    // White/Gray\n" \
+"            }\n" \
+"        }\n" \
+"        \n" \
+"        \n" \
 "       rgb = linearize(rgb, params.inOetf);\n" \
 "        \n" \
 "        // Load dynamic matrices using switch functions\n" \
@@ -610,6 +646,18 @@ const char* kernelSource =  \
 "            float3(-0.402710784451f, 0.0236246771724f, 0.956884503364f)\n" \
 "        );\n" \
 "        rgb = vdot(hardcodedxyzToP3Matrix, rgb);\n" \
+"        \n" \
+"        /***************************************************\n" \
+"         Tonescale Overlay Initialization\n" \
+"        --------------------------------------------------*/\n" \
+"        float crv_val = 0.0f;\n" \
+"        float2 pos = float2(id.x, id.y);\n" \
+"        float2 res = float2(p_Width, p_Height);\n" \
+"        \n" \
+"        // x-position based input value for tonescale overlay\n" \
+"        if (params.tonescaleMap == 1) {\n" \
+"            crv_val = oetf_filmlight_tlog(pos.x/res.x);\n" \
+"        }\n" \
 "    // Rendering Space: \"Desaturate\" to control scale of the color volume in the rgb ratios.\n" \
 "        // Controlled by params.rsSa (saturation) and red and blue weights (params.rsRw and params.rsBw)\n" \
 "        float3 rs_w = float3(params.rsRw, 1.0f - params.rsRw - params.rsBw, params.rsBw);\n" \
@@ -618,6 +666,7 @@ const char* kernelSource =  \
 "        \n" \
 "        // Offset\n" \
 "        rgb += params.tnOff;\n" \
+"        if (params.tonescaleMap == 1) crv_val += params.tnOff;\n" \
 "        \n" \
 "        /***************************************************\n" \
 "          Contrast Low Module\n" \
@@ -654,8 +703,52 @@ const char* kernelSource =  \
 "            else { // Just use ratio-preserving\n" \
 "                rgb = mcon_sc*rgb;\n" \
 "            }\n" \
+"            \n" \
+"            // Overlay tracking for low contrast\n" \
+"            if (params.tonescaleMap == 1) {\n" \
+"                crv_val *= mcon_cnst_sc;\n" \
+"                crv_val = crv_val*(crv_val*crv_val + mcon_m*mcon_w)/(crv_val*crv_val + mcon_w);\n" \
+"            }\n" \
 "        }\n" \
 "\n" \
+"        /***************************************************\n" \
+"          Filmic Dynamic Range Compression (BETA FEATURE)\n" \
+"        --------------------------------------------------*/\n" \
+"        if (params.filmicMode == 1 && params.betaFeaturesEnable == 1) {\n" \
+"            // Calculate maximum input based on original camera range\n" \
+"            float maxInput = pow(2.0f, params.filmicSourceStops);\n" \
+"            \n" \
+"            // Normalize RGB to 0-1 range based on original camera stops\n" \
+"            float3 normalizedRGB = rgb / maxInput;\n" \
+"            \n" \
+"            // Use Film Dynamic Range to control highlight rolloff characteristics\n" \
+"            // Higher values = gentler rolloff (more film-like latitude)\n" \
+"            // Lower values = harder rolloff (more aggressive compression)\n" \
+"            float rolloff_s = 0.05f + (params.filmicDynamicRange / 10.0f); // Range: 0.05 to 1.05\n" \
+"            float rolloff_p = 0.8f + (params.filmicDynamicRange / 25.0f);  // Range: 0.8 to 1.2\n" \
+"            \n" \
+"            // Apply hyperbolic compression with dynamic rolloff\n" \
+"            float3 compressedRGB = float3(\n" \
+"                compress_hyperbolic_power(normalizedRGB.x, rolloff_s, rolloff_p),\n" \
+"                compress_hyperbolic_power(normalizedRGB.y, rolloff_s, rolloff_p),\n" \
+"                compress_hyperbolic_power(normalizedRGB.z, rolloff_s, rolloff_p)\n" \
+"            );\n" \
+"            \n" \
+"            // Rescale to target film range\n" \
+"            float maxOutput = pow(2.0f, params.filmicTargetStops);\n" \
+"            float3 rescaledRGB = compressedRGB * maxOutput;\n" \
+"            \n" \
+"            // Mix between original and filmic compressed result\n" \
+"            rgb = rgb * (1.0f - params.filmicStrength) + rescaledRGB * params.filmicStrength;\n" \
+"            \n" \
+"            // Apply same compression to overlay curve\n" \
+"            if (params.tonescaleMap == 1) {\n" \
+"                float crv_normalized = crv_val / maxInput;\n" \
+"                float crv_compressed = compress_hyperbolic_power(crv_normalized, rolloff_s, rolloff_p);\n" \
+"                float crv_rescaled = crv_compressed * maxOutput;\n" \
+"                crv_val = crv_val * (1.0f - params.filmicStrength) + crv_rescaled * params.filmicStrength;\n" \
+"            }\n" \
+"        }\n" \
 "     /***************************************************\n" \
 "         Tonescale and RGB Ratios\n" \
 "        --------------------------------------------------*/\n" \
@@ -674,13 +767,15 @@ const char* kernelSource =  \
 "            float hcon_p = pow(2.0f, params.tnHcon);\n" \
 "            tsn = contrast_high(tsn, hcon_p, params.tnHconPv, params.tnHconSt, 0);\n" \
 "            ts_pt = contrast_high(ts_pt, hcon_p, params.tnHconPv, params.tnHconSt, 0);\n" \
+"            if (params.tonescaleMap == 1) crv_val = contrast_high(crv_val, hcon_p, params.tnHconPv, params.tnHconSt, 0);\n" \
 "        }\n" \
-"\n" \
 "        /***************************************************\n" \
 "          Apply Tonescale\n" \
 "        --------------------------------------------------*/\n" \
 "        tsn = compress_hyperbolic_power(tsn, params.ts_s, params.tnCon);\n" \
 "        ts_pt = compress_hyperbolic_power(ts_pt, params.ts_s1, params.tnCon);\n" \
+"        \n" \
+"        if (params.tonescaleMap == 1) crv_val = compress_hyperbolic_power(crv_val, params.ts_s, params.tnCon);\n" \
 "        \n" \
 "        \n" \
 " \n" \
@@ -837,6 +932,33 @@ const char* kernelSource =  \
 "        // Mix between Creative Whitepoint and base by tsn\n" \
 "        float cwp_f = pow(tsn, 1.0f - params.cwpRng);\n" \
 "        rgb = cwp_rgb*cwp_f + rgb*(1.0f - cwp_f);\n" \
+"// Process overlay curve for display gamut and creative whitepoint\n" \
+"        float3 crv_rgb = float3(crv_val, crv_val, crv_val);\n" \
+"        float3 crv_rgb_cwp = crv_rgb;\n" \
+"       if (params.tonescaleMap == 1) {\n" \
+"            if (params.displayGamut == 0) { // Rec.709\n" \
+"                // Apply creative whitepoint transform for overlay\n" \
+"                crv_rgb_cwp = vdot(cwpMatrix, crv_rgb);\n" \
+"                // Apply P3 to Rec.709 transform\n" \
+"                float3x3 p3ToRec709 = float3x3(\n" \
+"                    float3(1.224940181f, -0.04205697775f, -0.01963755488f),\n" \
+"                    float3(-0.2249402404f, 1.042057037f, -0.07863604277f),\n" \
+"                    float3(0.0f, -1.4901e-08f, 1.098273635f)\n" \
+"                );\n" \
+"                crv_rgb = vdot(p3ToRec709, crv_rgb);\n" \
+"                if (params.cwp == 0) crv_rgb_cwp = crv_rgb;\n" \
+"            }\n" \
+"            else if (params.displayGamut >= 1) {\n" \
+"                // Apply creative whitepoint transform for P3 and Rec.2020\n" \
+"                crv_rgb_cwp = vdot(cwpMatrix, crv_rgb);\n" \
+"                if (params.cwp == 0) crv_rgb_cwp = crv_rgb;\n" \
+"            }\n" \
+"            \n" \
+"            // Mix creative whitepoint for overlay curve\n" \
+"            float crv_rgb_cwp_f = pow(crv_val, 1.0f - params.cwpRng);\n" \
+"            crv_rgb = crv_rgb_cwp*crv_rgb_cwp_f + crv_rgb*(1.0f - crv_rgb_cwp_f);\n" \
+"        }\n" \
+"        \n" \
 "        /***************************************************\n" \
 "          Purity Compress Low\n" \
 "        --------------------------------------------------*/\n" \
@@ -858,8 +980,20 @@ const char* kernelSource =  \
 "        tsn = compress_toe_quadratic(tsn, params.tnToe, 0);\n" \
 "        tsn *= params.ts_dsc; // scale for display encoding\n" \
 "        \n" \
+"        // Track overlay value through final tonescale adjustments\n" \
+"        if (params.tonescaleMap == 1) {\n" \
+"            crv_rgb *= params.ts_m2;\n" \
+"            crv_rgb.x = compress_toe_quadratic(crv_rgb.x, params.tnToe, 0);\n" \
+"            crv_rgb.y = compress_toe_quadratic(crv_rgb.y, params.tnToe, 0);\n" \
+"            crv_rgb.z = compress_toe_quadratic(crv_rgb.z, params.tnToe, 0);\n" \
+"            crv_rgb *= params.ts_dsc;\n" \
+"            // scale to 1.0 = 1000 nits for st2084 PQ\n" \
+"            if (params.eotf == 4) crv_rgb *= 10.0f;\n" \
+"        }\n" \
+"        \n" \
 "        // Return from RGB ratios to final values\n" \
 "        rgb *= tsn;\n" \
+"        \n" \
 "        \n" \
 "        // Clamp if enabled\n" \
 "        if (params.clamp != 0) {\n" \
@@ -880,6 +1014,28 @@ const char* kernelSource =  \
 "        \n" \
 "        // ENCODE FOR DISPLAY using dynamic EOTF parameters\n" \
 "        rgb = encode_for_display(rgb, params.eotf);\n" \
+"        \n" \
+"        // Apply EOTF to overlay curve\n" \
+"        if (params.tonescaleMap == 1) {\n" \
+"            if ((params.eotf > 0) && (params.eotf < 4)) {\n" \
+"                float eotf_p = 2.0f + params.eotf * 0.2f;\n" \
+"                crv_rgb = spowf3(crv_rgb, 1.0f/eotf_p);\n" \
+"            }\n" \
+"            else if (params.eotf == 4) crv_rgb = eotf_pq(crv_rgb, 1);\n" \
+"            else if (params.eotf == 5) crv_rgb = eotf_hlg(crv_rgb, 1);\n" \
+"        }\n" \
+"        \n" \
+"        // Render overlay curve\n" \
+"        if (params.tonescaleMap == 1) {\n" \
+"            float3 crv_rgb_dst = float3(pos.y-crv_rgb.x*res.y, pos.y-crv_rgb.y*res.y, pos.y-crv_rgb.z*res.y);\n" \
+"            float crv_w0 = 0.05f; // width of tonescale overlay\n" \
+"            crv_rgb_dst.x = exp(-crv_rgb_dst.x*crv_rgb_dst.x*crv_w0);\n" \
+"            crv_rgb_dst.y = exp(-crv_rgb_dst.y*crv_rgb_dst.y*crv_w0);\n" \
+"            crv_rgb_dst.z = exp(-crv_rgb_dst.z*crv_rgb_dst.z*crv_w0);\n" \
+"            float crv_lm = params.eotf < 4 ? 1.0f : 0.5f; // reduced luminance in hdr\n" \
+"            crv_rgb_dst = clampf3(crv_rgb_dst, 0.0f, 1.0f);\n" \
+"            rgb = rgb * (1.0f - crv_rgb_dst) + crv_lm*crv_rgb_dst*crv_rgb_dst;\n" \
+"        }\n" \
 "        \n" \
 "        // Output to buffer\n" \
 "        p_Output[index + 0] = rgb.x;\n" \
@@ -920,6 +1076,10 @@ OpenDRTParams createOpenDRTParams(
     float p_HsR, float p_HsG, float p_HsB, float p_HsRgbRng,
     float p_HsC, float p_HsM, float p_HsY,
     float p_HcR,
+    // NEW PARAMETERS - Filmic Mode and Advanced Controls
+    bool p_FilmicMode, float p_FilmicDynamicRange, int p_FilmicProjectorSim,
+    float p_FilmicSourceStops, float p_FilmicTargetStops, float p_FilmicStrength,
+    bool p_AdvHueContrast, bool p_TonescaleMap, bool p_DiagnosticsMode, bool p_RgbChipsMode, bool p_BetaFeaturesEnable,
     int p_DisplayGamut, int p_Eotf)
 {
     OpenDRTParams params = {};
@@ -995,6 +1155,19 @@ OpenDRTParams createOpenDRTParams(
     
     // Hue Contrast Parameters
     params.hcR = p_HcR;
+    
+    // NEW PARAMETERS - Filmic Mode and Advanced Controls
+    params.filmicMode = p_FilmicMode ? 1 : 0;
+    params.filmicDynamicRange = p_FilmicDynamicRange;
+    params.filmicProjectorSim = p_FilmicProjectorSim;
+    params.filmicSourceStops = p_FilmicSourceStops;
+    params.filmicTargetStops = p_FilmicTargetStops;
+    params.filmicStrength = p_FilmicStrength;
+    params.advHueContrast = p_AdvHueContrast ? 1 : 0;
+    params.tonescaleMap = p_TonescaleMap ? 1 : 0;
+    params.diagnosticsMode = p_DiagnosticsMode ? 1 : 0;
+    params.rgbChipsMode = p_RgbChipsMode ? 1 : 0;
+    params.betaFeaturesEnable = p_BetaFeaturesEnable ? 1 : 0;
     
     // Display Parameters
     params.displayGamut = p_DisplayGamut;
@@ -1129,6 +1302,10 @@ void OpenDRTKernel(void* p_CmdQ, int p_Width, int p_Height,
                    float p_HsR, float p_HsG, float p_HsB, float p_HsRgbRng,
                    float p_HsC, float p_HsM, float p_HsY,
                    float p_HcR,
+                   // NEW PARAMETERS - Filmic Mode and Advanced Controls
+                   bool p_FilmicMode, float p_FilmicDynamicRange, int p_FilmicProjectorSim,
+                   float p_FilmicSourceStops, float p_FilmicTargetStops, float p_FilmicStrength,
+                   bool p_AdvHueContrast, bool p_TonescaleMap, bool p_DiagnosticsMode, bool p_RgbChipsMode, bool p_BetaFeaturesEnable,
                    int p_DisplayGamut, int p_Eotf)
 {
     const char* kernelName = "OpenDRTKernel";
@@ -1205,6 +1382,10 @@ void OpenDRTKernel(void* p_CmdQ, int p_Width, int p_Height,
         p_HsR, p_HsG, p_HsB, p_HsRgbRng,  // ADD ENABLE
         p_HsC, p_HsM, p_HsY,  // ADD ENABLE
         p_HcR,  // ADD ENABLE
+        // NEW PARAMETERS - Filmic Mode and Advanced Controls
+        p_FilmicMode, p_FilmicDynamicRange, p_FilmicProjectorSim,
+        p_FilmicSourceStops, p_FilmicTargetStops, p_FilmicStrength,
+        p_AdvHueContrast, p_TonescaleMap, p_DiagnosticsMode, p_RgbChipsMode, p_BetaFeaturesEnable,
         p_DisplayGamut, p_Eotf
     );
 

@@ -234,11 +234,24 @@ static const ColorMatrix3x3 OUTPUT_GAMUT_MATRICES[] = {
         return OUTPUT_GAMUT_MATRICES[0]; // Default to P3-D65
     }
 
-    inline const ColorMatrix3x3& getCreativeWhitepointMatrix(int displayGamut, int cwpIndex) {
-        if (displayGamut >= 0 && displayGamut < 3 && cwpIndex >= 0 && cwpIndex < 4) {
-            return CREATIVE_WHITEPOINT_MATRICES[displayGamut][cwpIndex];
+    inline const ColorMatrix3x3& getCreativeWhitepointMatrix(int displayGamut, int cwp) {
+        int matrixIndex;
+        
+        // Map display gamut to matrix array index
+        if (displayGamut == 0) {        // Rec.709
+            matrixIndex = 2;            // Use index [2] 
+        } else if (displayGamut == 1) { // P3-D65
+            matrixIndex = 0;            // Use index [0]
+        } else if (displayGamut == 2) { // Rec.2020
+            matrixIndex = 1;            // Use index [1]
+        } else {
+            matrixIndex = 0;            // Default to P3-D65
         }
-        return CREATIVE_WHITEPOINT_MATRICES[0][0]; // Default to identity
+        
+        // Map CWP parameter to array index
+        int cwpIndex = (cwp >= 0 && cwp <= 3) ? cwp : 0; // Default to D65
+        
+        return CREATIVE_WHITEPOINT_MATRICES[matrixIndex][cwpIndex];
     }
 
 

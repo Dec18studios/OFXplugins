@@ -20,7 +20,7 @@ using namespace OpenDRTPresets;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////// Step 2: Update these defines to give your plugin an identity //////////////////
-#define kPluginName "Open DRT GE OFXBeta 1.2"        // <-- UPDATE: Change this
+#define kPluginName "Open DRT GE OFX 1.1"        // <-- UPDATE: Change this
 #define kPluginGrouping "create@Dec18Studios.com"        // <-- UPDATE: Change this
 #define kPluginDescription "Picture Forming Of The Highest Caliber"  // <-- UPDATE: Change this
 //// Don't change the openfx part of this just the name...///////
@@ -90,6 +90,10 @@ public:
         bool p_HsCmyEnable, float p_HsC, float p_HsM, float p_HsY,
         // Hue Contrast Parameters
         bool p_HcEnable, float p_HcR,
+        // NEW PARAMETERS - Filmic Mode and Advanced Controls
+        bool p_FilmicMode, float p_FilmicDynamicRange, int p_FilmicProjectorSim,
+        float p_FilmicSourceStops, float p_FilmicTargetStops, float p_FilmicStrength,
+        bool p_AdvHueContrast, bool p_TonescaleMap, bool p_DiagnosticsMode, bool p_RgbChipsMode, bool p_BetaFeaturesEnable,
         // Display Parameters
         int p_DisplayGamut, int p_Eotf,
         // Current preset index to look up enables
@@ -164,6 +168,10 @@ extern void OpenDRTKernel(void* p_CmdQ, int p_Width, int p_Height,
                           float p_HsR, float p_HsG, float p_HsB, float p_HsRgbRng,
                           float p_HsC, float p_HsM, float p_HsY,
                           float p_HcR,
+                          // NEW PARAMETERS - Filmic Mode and Advanced Controls
+                          bool p_FilmicMode, float p_FilmicDynamicRange, int p_FilmicProjectorSim,
+                          float p_FilmicSourceStops, float p_FilmicTargetStops, float p_FilmicStrength,
+                          bool p_AdvHueContrast, bool p_TonescaleMap, bool p_DiagnosticsMode, bool p_RgbChipsMode, bool p_BetaFeaturesEnable,
                           int p_DisplayGamut, int p_Eotf);
 #endif
 
@@ -241,6 +249,10 @@ void ImageProcessor::processImagesMetal()
                   _params.hsR, _params.hsG, _params.hsB, _params.hsRgbRng,
                   _params.hsC, _params.hsM, _params.hsY,
                   _params.hcR,
+                  // NEW PARAMETERS - Filmic Mode and Advanced Controls
+                  (_params.filmicMode != 0), _params.filmicDynamicRange, _params.filmicProjectorSim,
+                  _params.filmicSourceStops, _params.filmicTargetStops, _params.filmicStrength,
+                  (_params.advHueContrast != 0), (_params.tonescaleMap != 0), (_params.diagnosticsMode != 0), (_params.rgbChipsMode != 0), (_params.betaFeaturesEnable != 0),
                   _params.displayGamut, _params.eotf);
 #endif
 }
@@ -335,6 +347,10 @@ void ImageProcessor::setOpenDRTParams(
     bool p_HsCmyEnable, float p_HsC, float p_HsM, float p_HsY,
     // Hue Contrast Parameters
     bool p_HcEnable, float p_HcR,
+    // NEW PARAMETERS - Filmic Mode and Advanced Controls
+    bool p_FilmicMode, float p_FilmicDynamicRange, int p_FilmicProjectorSim,
+    float p_FilmicSourceStops, float p_FilmicTargetStops, float p_FilmicStrength,
+    bool p_AdvHueContrast, bool p_TonescaleMap, bool p_DiagnosticsMode, bool p_RgbChipsMode, bool p_BetaFeaturesEnable,
     // Display Parameters
     int p_DisplayGamut, int p_Eotf,
     // Current preset index to look up enables
@@ -433,6 +449,20 @@ _params.cwp = final_cwp; // Now guaranteed to be 0-3
     _params.hsM = p_HsM;
     _params.hsY = p_HsY;
     _params.hcR = p_HcR;
+    
+    // NEW PARAMETERS - Filmic Mode and Advanced Controls
+    _params.filmicMode = p_FilmicMode ? 1 : 0;
+    _params.filmicDynamicRange = p_FilmicDynamicRange;
+    _params.filmicProjectorSim = p_FilmicProjectorSim;
+    _params.filmicSourceStops = p_FilmicSourceStops;
+    _params.filmicTargetStops = p_FilmicTargetStops;
+    _params.filmicStrength = p_FilmicStrength;
+    _params.advHueContrast = p_AdvHueContrast ? 1 : 0;
+    _params.tonescaleMap = p_TonescaleMap ? 1 : 0;
+    _params.diagnosticsMode = p_DiagnosticsMode ? 1 : 0;
+    _params.rgbChipsMode = p_RgbChipsMode ? 1 : 0;
+    _params.betaFeaturesEnable = p_BetaFeaturesEnable ? 1 : 0;
+    
     _params.displayGamut = p_DisplayGamut;
     _params.eotf = p_Eotf;
 }
@@ -587,6 +617,13 @@ private:
     OFX::BooleanParam* m_HcEnable;     // Enable Hue Contrast
     OFX::DoubleParam* m_HcR;           // Hue Contrast R
     
+    // Advanced Hue Contrast Parameters
+    OFX::DoubleParam* m_AdvHcG;        // Advanced Hue Contrast G
+    OFX::DoubleParam* m_AdvHcB;        // Advanced Hue Contrast B
+    OFX::DoubleParam* m_AdvHcC;        // Advanced Hue Contrast C
+    OFX::DoubleParam* m_AdvHcM;        // Advanced Hue Contrast M
+    OFX::DoubleParam* m_AdvHcY;        // Advanced Hue Contrast Y
+    
     // Display Parameters
     OFX::ChoiceParam* m_DisplayGamut;  // Display Gamut
     OFX::ChoiceParam* m_Eotf;          // Display EOTF
@@ -606,6 +643,29 @@ private:
     OFX::BooleanParam* m_LockHueshiftRgb;
     OFX::BooleanParam* m_LockHueshiftCmy;
     OFX::BooleanParam* m_LockHueContrast;
+
+    // NEW PARAMETERS - Filmic Mode and Advanced Controls
+    OFX::BooleanParam* m_FilmicMode;            // Enable Filmic Mode
+    OFX::BooleanParam* m_AdvHueContrast;        // Advanced Hue Contrast
+    OFX::BooleanParam* m_TonescaleMap;          // Tonescale Map
+    OFX::BooleanParam* m_DiagnosticsMode;       // Diagnostics Mode
+    OFX::BooleanParam* m_RgbChipsMode;          // RGB Chips Mode
+    OFX::DoubleParam* m_FilmicDynamicRange;     // Filmic Dynamic Range
+    OFX::ChoiceParam* m_FilmicProjectorSim;     // Filmic Projector Sim
+    OFX::BooleanParam* m_BetaFeaturesEnable;    // Enable Beta Features
+    OFX::BooleanParam* m_RgbChipsEnable;  // NEW: Enable RGB Chips parameter
+    
+    // NEW FILMIC PARAMETERS
+    OFX::DoubleParam* m_FilmicSourceStops;      // Original Camera Range
+    OFX::DoubleParam* m_FilmicTargetStops;      // Target Film Range
+    OFX::DoubleParam* m_FilmicStrength;         // Filmic Strength
+    
+    // NEW GROUP PARAMETERS
+    OFX::GroupParam* m_DiagnosticsGroup;        // Diagnostics Group
+    OFX::GroupParam* m_FilmicDynamicRangeGroup; // Filmic Dynamic Range Group
+    OFX::GroupParam* m_FilmicProjectorSimGroup; // Filmic Projector Sim Group
+    OFX::GroupParam* m_BetaFeaturesGroup;       // Beta Features Group
+    OFX::GroupParam* m_AdvHueContrastGroup;     // Advanced Hue Contrast Group
 
     OFX::PushButtonParam* m_CoffeeButton;        // Coffee support button
 };
@@ -629,6 +689,13 @@ OpenDRT::OpenDRT(OfxImageEffectHandle p_Handle)
     m_HueshiftRgbGroup = fetchGroupParam("HueshiftRgbGroup");
     m_HueshiftCmyGroup = fetchGroupParam("HueshiftCmyGroup");
     m_HueContrastGroup = fetchGroupParam("HueContrastGroup");
+
+    // NEW GROUP PARAMETERS
+    m_DiagnosticsGroup = fetchGroupParam("DiagnosticsGroup");
+    m_FilmicDynamicRangeGroup = fetchGroupParam("FilmicDynamicRangeGroup");
+    m_FilmicProjectorSimGroup = fetchGroupParam("FilmicProjectorSimGroup");
+    m_BetaFeaturesGroup = fetchGroupParam("BetaFeaturesGroup");
+    m_AdvHueContrastGroup = fetchGroupParam("AdvHueContrastGroup");
 
     // Connect to all the parameter controls created in describeInContext()
 
@@ -715,6 +782,28 @@ OpenDRT::OpenDRT(OfxImageEffectHandle p_Handle)
     // Hue Contrast Parameters
     m_HcEnable = fetchBooleanParam("_hc_enable");
     m_HcR = fetchDoubleParam("_hc_r");
+    
+    // Advanced Hue Contrast Parameters
+    m_AdvHcG = fetchDoubleParam("_adv_hc_g");
+    m_AdvHcB = fetchDoubleParam("_adv_hc_b");
+    m_AdvHcC = fetchDoubleParam("_adv_hc_c");
+    m_AdvHcM = fetchDoubleParam("_adv_hc_m");
+    m_AdvHcY = fetchDoubleParam("_adv_hc_y");
+    
+    // NEW PARAMETERS - Filmic Mode and Advanced Controls
+    m_FilmicMode = fetchBooleanParam("_filmic_mode");
+    m_AdvHueContrast = fetchBooleanParam("_adv_hue_contrast");
+    m_TonescaleMap = fetchBooleanParam("_tonescale_map");
+    m_DiagnosticsMode = fetchBooleanParam("_diagnostics_mode");
+    m_RgbChipsMode = fetchBooleanParam("_rgbchips");
+    m_FilmicDynamicRange = fetchDoubleParam("_filmic_dynamic_range");
+    m_FilmicProjectorSim = fetchChoiceParam("_filmic_projector_sim");
+    m_BetaFeaturesEnable = fetchBooleanParam("_beta_features_enable");
+    
+    // NEW FILMIC PARAMETERS
+    m_FilmicSourceStops = fetchDoubleParam("_filmic_source_stops");
+    m_FilmicTargetStops = fetchDoubleParam("_filmic_target_stops");
+    m_FilmicStrength = fetchDoubleParam("_filmic_strength");
     
     // Display Parameters
     m_DisplayGamut = fetchChoiceParam("_display_gamut");
@@ -812,7 +901,13 @@ void OpenDRT::changedParam(const OFX::InstanceChangedArgs& p_Args, const std::st
         p_ParamName == "_brl_enable" ||
         p_ParamName == "_hs_rgb_enable" ||
         p_ParamName == "_hs_cmy_enable" ||
-        p_ParamName == "_hc_enable")
+        p_ParamName == "_hc_enable" ||
+        p_ParamName == "_filmic_mode" ||
+        p_ParamName == "_adv_hue_contrast" ||
+        p_ParamName == "_tonescale_map" ||
+        p_ParamName == "_diagnostics_mode" ||
+        p_ParamName == "_rgbchips" ||
+        p_ParamName == "_beta_features_enable")
     {
         setEnabledness();
     }
@@ -820,7 +915,7 @@ void OpenDRT::changedParam(const OFX::InstanceChangedArgs& p_Args, const std::st
     else if (p_ParamName == "buymeacoffee")
     {
         // Open Buy Me a Coffee link
-        std::string url = "https://www.dec18studios.com/coffee/"; // Replace with your actual URL
+        std::string url = "https://dec18studios.com/open-drt-ofx"; // Replace with your actual URL
         
 #ifdef __APPLE__
         std::string command = "open \"" + url + "\"";
@@ -864,6 +959,13 @@ void OpenDRT::setEnabledness()
     bool hsCmyEnabled = m_HsCmyEnable->getValue();
     bool hcEnabled = m_HcEnable->getValue();
     
+    // NEW ENABLE STATES
+    bool filmicModeEnabled = m_FilmicMode->getValue();
+    bool diagnosticsEnabled = m_DiagnosticsMode->getValue();
+    bool rgbChipsEnabled = m_RgbChipsMode->getValue();
+    bool betaFeaturesEnabled = m_BetaFeaturesEnable->getValue();
+    bool advHueContrastEnabled = m_AdvHueContrast->getValue();
+    
     // Show/hide groups based on enable states using setIsSecret()
     m_HighContrastGroup->setIsSecret(!hconEnabled);
     m_LowContrastGroup->setIsSecret(!lconEnabled);
@@ -873,6 +975,28 @@ void OpenDRT::setEnabledness()
     m_HueshiftRgbGroup->setIsSecret(!hsRgbEnabled);
     m_HueshiftCmyGroup->setIsSecret(!hsCmyEnabled);
     m_HueContrastGroup->setIsSecret(!hcEnabled);
+    
+    // NEW GROUP VISIBILITY CONTROL
+    // Diagnostics Group - Always visible but closed
+    m_DiagnosticsGroup->setIsSecret(false);
+    
+    // ✅ STEP 1: First enable/disable the mode parameters based on Beta Features
+    m_FilmicMode->setEnabled(betaFeaturesEnabled);
+    m_AdvHueContrast->setEnabled(betaFeaturesEnabled);
+    
+    // ✅ STEP 2: Then show/hide groups based on BOTH conditions
+    // If Beta Features is OFF, hide everything regardless of individual mode states
+    // If Beta Features is ON, show groups only when individual modes are also ON
+    bool showFilmicGroups = betaFeaturesEnabled && filmicModeEnabled;
+    bool showAdvHueContrastGroup = betaFeaturesEnabled && advHueContrastEnabled;
+    
+    m_FilmicDynamicRangeGroup->setIsSecret(!showFilmicGroups);
+    m_FilmicProjectorSimGroup->setIsSecret(!showFilmicGroups);
+    m_AdvHueContrastGroup->setIsSecret(!showAdvHueContrastGroup);
+    
+    // Beta Features - Control individual parameter enablement (not group visibility)
+    m_FilmicMode->setEnabled(betaFeaturesEnabled);
+    m_AdvHueContrast->setEnabled(betaFeaturesEnabled);
     
     // The individual parameters within the groups are automatically handled
     // by the group visibility, so we can remove the individual setEnabled calls
@@ -904,7 +1028,7 @@ void OpenDRT::applyPresetValues(const OFX::InstanceChangedArgs& p_Args)
     bool lockHueContrast = m_LockHueContrast->getValue();
     
     // Apply look preset values
-    if (lookPreset > 0 && lookPreset <= 4) {
+    if (lookPreset >= 0 && lookPreset <= 4) {
         const OpenDRTLookPreset& preset = LOOK_PRESETS[lookPreset];
         
         // Always apply basic tonescale parameters (never locked)
@@ -1137,6 +1261,31 @@ void OpenDRT::setupAndProcess(ImageProcessor& p_Processor, const OFX::RenderArgu
     bool hcEnable = m_HcEnable->getValueAtTime(p_Args.time);
     float hcR = m_HcR->getValueAtTime(p_Args.time);
     
+    // NEW PARAMETERS
+    // Filmic Parameters
+    bool filmicMode = m_FilmicMode->getValueAtTime(p_Args.time);
+    float filmicDynamicRange = m_FilmicDynamicRange->getValueAtTime(p_Args.time);
+    int filmicProjectorSim;
+    m_FilmicProjectorSim->getValueAtTime(p_Args.time, filmicProjectorSim);
+    
+    // NEW FILMIC PARAMETERS
+    float filmicSourceStops = m_FilmicSourceStops->getValueAtTime(p_Args.time);
+    float filmicTargetStops = m_FilmicTargetStops->getValueAtTime(p_Args.time);
+    float filmicStrength = m_FilmicStrength->getValueAtTime(p_Args.time);
+    
+    // Advanced Hue Contrast Parameters
+    bool advHueContrast = m_AdvHueContrast->getValueAtTime(p_Args.time);
+    
+    // Tonescale Map Parameters
+    bool tonescaleMap = m_TonescaleMap->getValueAtTime(p_Args.time);
+    
+    // Diagnostics Parameters
+    bool diagnosticsMode = m_DiagnosticsMode->getValueAtTime(p_Args.time);
+    bool rgbChipsMode = m_RgbChipsMode->getValueAtTime(p_Args.time);
+    
+    // Beta Features Parameters
+    bool betaFeaturesEnable = m_BetaFeaturesEnable->getValueAtTime(p_Args.time);
+    
     // Display Parameters
     int displayGamut;
     m_DisplayGamut->getValueAtTime(p_Args.time, displayGamut);
@@ -1183,6 +1332,10 @@ void OpenDRT::setupAndProcess(ImageProcessor& p_Processor, const OFX::RenderArgu
         hsCmyEnable, hsC, hsM, hsY,
         // Hue Contrast Parameters
         hcEnable, hcR,
+        // NEW PARAMETERS - Filmic Mode and Advanced Controls
+        filmicMode, filmicDynamicRange, filmicProjectorSim,
+        filmicSourceStops, filmicTargetStops, filmicStrength,
+        advHueContrast, tonescaleMap, diagnosticsMode, rgbChipsMode, betaFeaturesEnable,
         // Display Parameters
         displayGamut, eotf,
         // Look Preset
@@ -1402,7 +1555,42 @@ void OpenDRTFactory::describeInContext(OFX::ImageEffectDescriptor& p_Desc, OFX::
     hueContrastGroup->setHint("Hue contrast adjustment controls");
     hueContrastGroup->setLabels("Hue Contrast", "Hue Contrast", "Hue Contrast");
     hueContrastGroup->setOpen(false);
- 
+    
+    // NEW GROUPS
+    // Diagnostics Group
+    GroupParamDescriptor* diagnosticsGroup = p_Desc.defineGroupParam("DiagnosticsGroup");
+    diagnosticsGroup->setHint("Diagnostic and visualization tools");
+    diagnosticsGroup->setLabels("Diagnostics", "Diagnostics", "Diagnostics");
+    diagnosticsGroup->setOpen(false); // Closed Always displayed
+    
+     // ADD: Buy Me a Coffee button at the end
+    PushButtonParamDescriptor* coffeeButton = p_Desc.definePushButtonParam("buymeacoffee");
+    coffeeButton->setLabel("Learn How to Use Open DRT");
+    coffeeButton->setHint("Tutorials, documentation, and support for Open DRT");
+    page->addChild(*coffeeButton);
+    
+    // Beta Features Group
+    GroupParamDescriptor* betaFeaturesGroup = p_Desc.defineGroupParam("BetaFeaturesGroup");
+    betaFeaturesGroup->setHint("Experimental or work-in-progress parameters");
+    betaFeaturesGroup->setLabels("Beta Features", "Beta Features", "Beta Features");
+    betaFeaturesGroup->setOpen(false); // Always visible but parameters controlled individually
+    
+    // Advanced Hue Contrast Group
+    GroupParamDescriptor* advHueContrastGroup = p_Desc.defineGroupParam("AdvHueContrastGroup");
+    advHueContrastGroup->setHint("Advanced hue contrast adjustment controls");
+    advHueContrastGroup->setLabels("Advanced Hue Contrast", "Advanced Hue Contrast", "Advanced Hue Contrast");
+    advHueContrastGroup->setOpen(false); // Hidden based on Advanced Hue Contrast Enable
+    // Filmic Dynamic Range Group
+    GroupParamDescriptor* filmicDynamicRangeGroup = p_Desc.defineGroupParam("FilmicDynamicRangeGroup");
+    filmicDynamicRangeGroup->setHint("Filmic dynamic range controls");
+    filmicDynamicRangeGroup->setLabels("Filmic Dynamic Range Beta", "Filmic Dynamic Range Beta", "Filmic Dynamic Range Beta");
+    filmicDynamicRangeGroup->setOpen(false); // Hidden based on Filmic Mode
+    
+    // Filmic Projector Sim Group
+    GroupParamDescriptor* filmicProjectorSimGroup = p_Desc.defineGroupParam("FilmicProjectorSimGroup");
+    filmicProjectorSimGroup->setHint("Filmic projector simulation controls");
+    filmicProjectorSimGroup->setLabels("Filmic Projector Sim Beta", "Filmic Projector Sim Beta", "Filmic Projector Sim Beta");
+    filmicProjectorSimGroup->setOpen(false); // Hidden Based on Filmic Mode
 
     // Add groups to page
     page->addChild(*inputGroup);
@@ -1419,6 +1607,13 @@ void OpenDRTFactory::describeInContext(OFX::ImageEffectDescriptor& p_Desc, OFX::
     page->addChild(*hueshiftRgbGroup);
     page->addChild(*hueshiftCmyGroup);
     page->addChild(*hueContrastGroup);
+        page->addChild(*betaFeaturesGroup);
+    
+    // ADD NEW GROUPS TO PAGE
+    page->addChild(*diagnosticsGroup);
+    page->addChild(*filmicDynamicRangeGroup);
+    page->addChild(*filmicProjectorSimGroup);
+    page->addChild(*advHueContrastGroup);
 
     ////////////////////////////////////////////////////////////////////////////////
     // INPUT SETTINGS
@@ -1833,6 +2028,31 @@ page->addChild(*tonescalePresetParam);
     hcEnableParam->setLabels("Enable Hue Contrast", "Enable Hue Contrast", "Enable Hue Contrast");
     hcEnableParam->setParent(*stickshiftGroup);
     page->addChild(*hcEnableParam);
+    
+    // NEW PARAMETERS IN STICKSHIFT GROUP
+    // Filmic Mode Enable
+    BooleanParamDescriptor* filmicModeParam = p_Desc.defineBooleanParam("_filmic_mode");
+    filmicModeParam->setDefault(false); // Deactivated by default
+    filmicModeParam->setHint("Enable filmic mode rendering");
+    filmicModeParam->setLabels("Enable Filmic Mode Beta", "Enable Filmic Mode Beta", "Enable Filmic Mode Beta");
+    filmicModeParam->setParent(*betaFeaturesGroup);
+    page->addChild(*filmicModeParam);
+    
+    // Advanced Hue Contrast Enable
+    BooleanParamDescriptor* advHueContrastParam = p_Desc.defineBooleanParam("_adv_hue_contrast");
+    advHueContrastParam->setDefault(false); // Deactivated by default
+    advHueContrastParam->setHint("Enable advanced hue contrast adjustments");
+    advHueContrastParam->setLabels("Enable Adv Hue Contrast", "Enable Adv Hue Contrast", "Enable Adv Hue Contrast");
+    advHueContrastParam->setParent(*betaFeaturesGroup);
+    page->addChild(*advHueContrastParam);
+    
+    // Beta Features Enable
+    BooleanParamDescriptor* betaFeaturesEnableParam = p_Desc.defineBooleanParam("_beta_features_enable");
+    betaFeaturesEnableParam->setDefault(false); // Deactivated by default
+    betaFeaturesEnableParam->setHint("Turns on experimental and hidden controls");
+    betaFeaturesEnableParam->setLabels("Enable Beta Features", "Enable Beta Features", "Enable Beta Features");
+    betaFeaturesEnableParam->setParent(*betaFeaturesGroup);
+    page->addChild(*betaFeaturesEnableParam);
 
     BooleanParamDescriptor* lockHcParam = p_Desc.defineBooleanParam("_lock_hc");
     lockHcParam->setDefault(false);
@@ -1845,6 +2065,97 @@ page->addChild(*tonescalePresetParam);
     param = defineDoubleParam(p_Desc, "_hc_r", "Hue Contrast R", "Red hue contrast adjustment", 
                              hueContrastGroup, 0.600, -1.0, 1.0, 0.001);
     page->addChild(*param);
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // ADVANCED HUE CONTRAST GROUP PARAMETERS
+    ////////////////////////////////////////////////////////////////////////////////
+    
+    // Advanced Hue Contrast Parameters (in Advanced Hue Contrast group)
+    param = defineDoubleParam(p_Desc, "_adv_hc_g", "Advanced Hue Contrast G", "Green advanced hue contrast adjustment", 
+                             advHueContrastGroup, 0.0, -1.0, 1.0, 0.001);
+    page->addChild(*param);
+    
+    param = defineDoubleParam(p_Desc, "_adv_hc_b", "Advanced Hue Contrast B", "Blue advanced hue contrast adjustment", 
+                             advHueContrastGroup, 0.0, -1.0, 1.0, 0.001);
+    page->addChild(*param);
+    
+    param = defineDoubleParam(p_Desc, "_adv_hc_c", "Advanced Hue Contrast C", "Cyan advanced hue contrast adjustment", 
+                             advHueContrastGroup, 0.0, -1.0, 1.0, 0.001);
+    page->addChild(*param);
+    
+    param = defineDoubleParam(p_Desc, "_adv_hc_m", "Advanced Hue Contrast M", "Magenta advanced hue contrast adjustment", 
+                             advHueContrastGroup, 0.0, -1.0, 1.0, 0.001);
+    page->addChild(*param);
+    
+    param = defineDoubleParam(p_Desc, "_adv_hc_y", "Advanced Hue Contrast Y", "Yellow advanced hue contrast adjustment", 
+                             advHueContrastGroup, 0.0, -1.0, 1.0, 0.001);
+    page->addChild(*param);
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // NEW PARAMETER GROUPS AND PARAMETERS
+    ////////////////////////////////////////////////////////////////////////////////
+    
+    // DIAGNOSTICS GROUP PARAMETERS
+    // Tonescale Map Parameter (in Diagnostics group)
+    BooleanParamDescriptor* tonescaleMapParam = p_Desc.defineBooleanParam("_tonescale_map");
+    tonescaleMapParam->setDefault(false); // Deactivated by default
+    tonescaleMapParam->setHint("Enable tonescale mapping visualization");
+    tonescaleMapParam->setLabels("Tonescale Curve", "Tonescale Curve", "Tonescale Curve");
+    tonescaleMapParam->setParent(*diagnosticsGroup);
+    page->addChild(*tonescaleMapParam);
+    
+    // Diagnostics Mode Parameter (in Diagnostics group)
+    BooleanParamDescriptor* diagnosticsModeParam = p_Desc.defineBooleanParam("_diagnostics_mode");
+    diagnosticsModeParam->setDefault(false); // Deactivated by default
+    diagnosticsModeParam->setHint("Enable Grey Scale Ramp");
+    diagnosticsModeParam->setLabels("Grey Scale Ramp", "Grey Scale Ramp", "Grey Scale Ramp");
+    diagnosticsModeParam->setParent(*diagnosticsGroup);
+    page->addChild(*diagnosticsModeParam);
+    
+    // RGB Chips Parameter (in Diagnostics group)
+    BooleanParamDescriptor* rgbChipsModeParam = p_Desc.defineBooleanParam("_rgbchips");
+    rgbChipsModeParam->setDefault(false); // Deactivated by default
+    rgbChipsModeParam->setHint("Enable RGB Chips");
+    rgbChipsModeParam->setLabels("RGB Chips", "RGB Chips", "RGB Chips");
+    rgbChipsModeParam->setParent(*diagnosticsGroup);
+    page->addChild(*rgbChipsModeParam);
+    
+    // FILMIC DYNAMIC RANGE GROUP PARAMETERS
+    // Filmic Dynamic Range Parameter (in Filmic Dynamic Range group)
+   
+    
+    // Original Camera Range Parameter
+    param = defineDoubleParam(p_Desc, "_filmic_source_stops", "Original Camera Range", "Number of stops captured by the original camera or scene", 
+                             filmicDynamicRangeGroup, 14.0, 1.0, 20.0, 1.0);
+    page->addChild(*param);
+    
+    // Target Film Range Parameter
+    param = defineDoubleParam(p_Desc, "_filmic_target_stops", "Target Film Range", "Stops the final image should be compressed into to mimic film", 
+                             filmicDynamicRangeGroup, 10.0, 1.0, 20.0, 1.0);
+    page->addChild(*param);
+
+    param = defineDoubleParam(p_Desc, "_filmic_dynamic_range", "Roll Off Characteristics", "Controls highlight rolloff characteristics. Lower = harder rolloff (reversal film), Higher = gentler rolloff (negative film)", 
+                             filmicDynamicRangeGroup, 5.0, 1.0, 10.0, 0.1);
+    page->addChild(*param);
+    
+    // Filmic Strength Parameter
+    param = defineDoubleParam(p_Desc, "_filmic_strength", "Strength", "Blends between the tonescaled image and the compressed result. 1.0 = full compression, 0.0 = no change", 
+                             filmicDynamicRangeGroup, 0.0, 0.0, 1.0, 0.01);
+    page->addChild(*param);
+    
+    // FILMIC PROJECTOR SIM GROUP PARAMETERS
+    // Filmic Projector Simulation Parameter (in Filmic Projector Sim group)
+    ChoiceParamDescriptor* filmicProjectorSimParam = p_Desc.defineChoiceParam("_filmic_projector_sim");
+    filmicProjectorSimParam->setLabel("Projector Simulation");
+    filmicProjectorSimParam->setHint("Filmic projector simulation type");
+    filmicProjectorSimParam->appendOption("None");
+    filmicProjectorSimParam->appendOption("Xenon");
+    filmicProjectorSimParam->appendOption("Tungsten");
+    filmicProjectorSimParam->appendOption("LED");
+    filmicProjectorSimParam->setDefault(0); // None
+    filmicProjectorSimParam->setAnimates(true);
+    filmicProjectorSimParam->setParent(*filmicProjectorSimGroup);
+    page->addChild(*filmicProjectorSimParam);
 
     ////////////////////////////////////////////////////////////////////////////////
     // DISPLAY SETTINGS
@@ -1878,11 +2189,10 @@ page->addChild(*tonescalePresetParam);
     page->addChild(*eotfParam);
 // Add this at the very end of describeInContext, just before the closing brace:
 
-    // ADD: Buy Me a Coffee button at the end
-    PushButtonParamDescriptor* coffeeButton = p_Desc.definePushButtonParam("buymeacoffee");
-    coffeeButton->setLabel("☕ Buy Me a Coffee");
-    coffeeButton->setHint("Support the developer - opens external link to Buy Me a Coffee");
-    page->addChild(*coffeeButton);
+
+    
+    // ADD: Beta Features Group after Learn More button
+
 
 }
 ////////////////////////////////////////////////////////////////////////////////
