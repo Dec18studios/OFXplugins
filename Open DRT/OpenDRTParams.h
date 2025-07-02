@@ -1,5 +1,28 @@
 #pragma once
 
+// Forward declaration for float3 structure
+struct float3 {
+    float x, y, z;
+    float3() : x(0), y(0), z(0) {}
+    float3(float _x, float _y, float _z) : x(_x), y(_y), z(_z) {}
+};
+
+// Hue Anchor Compression Parameters Structure
+struct HueCompressionParams {
+    float3 anchorBaseVectors[6];     // RGB, CMY base directions (unit RGB vectors)
+    float  anchorRotations[6];       // Degrees of hue rotation per anchor
+    float  anchorStrengths[6];       // Pull strength per anchor (0–1)
+    float  anchorFalloffAngles[6];   // Falloff angle per anchor in degrees (default: 30)
+
+    // Global and ganging controls
+    bool useSingleAnchorSettings;    // Use only anchor 0's settings for all
+    bool gangRGBAnchors;             // Use anchor 0 settings for anchors 0–2
+    bool gangCMYAnchors;             // Use anchor 3 settings for anchors 3–5
+    bool globalRotationEnabled;      // Add global hue spin to all anchors
+    float globalRotation;            // Global spin in degrees
+    float globalStrength;            // Multiplier on all anchor strengths
+};
+
 // OpenDRT Parameters Structure - shared between C++ and Metal
 struct OpenDRTParams {
     // Input/Output Settings
@@ -127,8 +150,19 @@ struct OpenDRTParams {
     int brlEnable;
     int hsRgbEnable;
     int hsCmyEnable;
-    int hcEnable;
-
+    
+    // HUE ANCHOR COMPRESSION PARAMETERS
+    int hueCompressionEnable;           // Enable hue anchor compression (bool converted to int)
+    float hueAnchorRotations[6];        // Degrees of hue rotation per anchor
+    float hueAnchorStrengths[6];        // Pull strength per anchor (0–1)
+    float hueAnchorFalloffAngles[6];    // Falloff angle per anchor in degrees
+    int hueUseSingleAnchorSettings;     // Use only anchor 0's settings for all (bool converted to int)
+    int hueGangRGBAnchors;              // Use anchor 0 settings for anchors 0–2 (bool converted to int)
+    int hueGangCMYAnchors;              // Use anchor 3 settings for anchors 3–5 (bool converted to int)
+    int hueGlobalRotationEnabled;       // Add global hue spin to all anchors (bool converted to int)
+    float hueGlobalRotation;            // Global spin in degrees
+    float hueGlobalStrength;            // Multiplier on all anchor strengths
+    
     // UI ENABLE FLAGS (for UI visibility)
     int tnHconUIEnable;
     int tnLconUIEnable;
@@ -149,4 +183,6 @@ struct OpenDRTParams {
     int hsCmyPresetEnable;
     int hcPresetEnable;
     
+    // Hue Compression Parameters (NEW)
+    HueCompressionParams hueCompression;
 };

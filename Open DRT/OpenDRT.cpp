@@ -2180,6 +2180,23 @@ page->addChild(*tonescalePresetParam);
     // Original Camera Range Parameter
     param = defineDoubleParam(p_Desc, "_filmic_source_stops", "Original Camera Range", "Number of stops captured by the original camera or scene", 
                              filmicDynamicRangeGroup, 14.0, 1.0, 20.0, 1.0);
+    page->addChild(*diagnosticsModeParam);
+    
+    // RGB Chips Parameter (in Diagnostics group)
+    BooleanParamDescriptor* rgbChipsModeParam = p_Desc.defineBooleanParam("_rgbchips");
+    rgbChipsModeParam->setDefault(false); // Deactivated by default
+    rgbChipsModeParam->setHint("Enable RGB Chips");
+    rgbChipsModeParam->setLabels("RGB Chips", "RGB Chips", "RGB Chips");
+    rgbChipsModeParam->setParent(*diagnosticsGroup);
+    page->addChild(*rgbChipsModeParam);
+    
+    // FILMIC DYNAMIC RANGE GROUP PARAMETERS
+    // Filmic Dynamic Range Parameter (in Filmic Dynamic Range group)
+   
+    
+    // Original Camera Range Parameter
+    param = defineDoubleParam(p_Desc, "_filmic_source_stops", "Original Camera Range", "Number of stops captured by the original camera or scene", 
+                             filmicDynamicRangeGroup, 14.0, 1.0, 20.0, 1.0);
     page->addChild(*param);
     
     // Target Film Range Parameter

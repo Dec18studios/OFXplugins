@@ -116,6 +116,18 @@ const char* kernelSource =  \
 "    int hsCmyEnable;\n" \
 "    int hcEnable;\n" \
 "    \n" \
+"    // HUE ANCHOR COMPRESSION PARAMETERS\n" \
+"    int hueCompressionEnable;\n" \
+"    float hueAnchorRotations[6];\n" \
+"    float hueAnchorStrengths[6];\n" \
+"    float hueAnchorFalloffAngles[6];\n" \
+"    int hueUseSingleAnchorSettings;\n" \
+"    int hueGangRGBAnchors;\n" \
+"    int hueGangCMYAnchors;\n" \
+"    int hueGlobalRotationEnabled;\n" \
+"    float hueGlobalRotation;\n" \
+"    float hueGlobalStrength;\n" \
+"    \n" \
 "    // UI ENABLE FLAGS (for UI visibility)\n" \
 "    int tnHconUIEnable;\n" \
 "    int tnLconUIEnable;\n" \
@@ -640,7 +652,6 @@ const char* kernelSource =  \
 "            }\n" \
 "        }\n" \
 "        \n" \
-"        \n" \
 "       rgb = linearize(rgb, params.inOetf);\n" \
 "        \n" \
 "        // Load dynamic matrices using switch functions\n" \
@@ -650,6 +661,86 @@ const char* kernelSource =  \
 "        \n" \
 "        // Apply input matrix transform\n" \
 "        rgb = vdot(inputMatrix, rgb);\n" \
+"        \n" \
+"        /***************************************************\n" \
+"          Hue Anchor Compression System\n" \
+"        --------------------------------------------------*/\n" \
+"        if (params.hueCompressionEnable == 1) {\n" \
+"            // Base anchor vectors (RGB, CMY)\n" \
+"            float3 anchorBaseVectors[6] = {\n" \
+"                float3(1, 0, 0), // Red\n" \
+"                float3(0, 1, 0), // Green  \n" \
+"                float3(0, 0, 1), // Blue\n" \
+"                float3(0, 1, 1), // Cyan\n" \
+"                float3(1, 0, 1), // Magenta\n" \
+"                float3(1, 1, 0)  // Yellow\n" \
+"            };\n" \
+"            \n" \
+"            // Preprocess anchor settings with ganging logic\n" \
+"            float3 grayAxis = normalize(float3(1.0f, 1.0f, 1.0f));\n" \
+"            float3 rotatedAnchors[6];\n" \
+"            float strengths[6];\n" \
+"            float cosFalloff[6];\n" \
+"            \n" \
+"            for (int i = 0; i < 6; ++i) {\n" \
+"                int sourceIndex = i;\n" \
+"                \n" \
+"                if (params.hueUseSingleAnchorSettings == 1) sourceIndex = 0;\n" \
+"                else if (params.hueGangRGBAnchors == 1 && i < 3) sourceIndex = 0;\n" \
+"                else if (params.hueGangCMYAnchors == 1 && i >= 3) sourceIndex = 3;\n" \
+"                \n" \
+"                float3 base = anchorBaseVectors[sourceIndex];\n" \
+"                float rotation = params.hueAnchorRotations[sourceIndex];\n" \
+"                float strength = params.hueAnchorStrengths[sourceIndex];\n" \
+"                float falloffDeg = params.hueAnchorFalloffAngles[sourceIndex];\n" \
+"                \n" \
+"                // Apply global modifiers\n" \
+"                if (params.hueGlobalRotationEnabled == 1)\n" \
+"                    rotation += params.hueGlobalRotation;\n" \
+"                \n" \
+"                strength *= params.hueGlobalStrength;\n" \
+"                \n" \
+"                // Rodrigues' rotation around gray axis\n" \
+"                float theta = rotation * PI / 180.0f; // Convert to radians\n" \
+"                float c = cos(theta);\n" \
+"                float s = sin(theta);\n" \
+"                float dotProd = dot(grayAxis, base);\n" \
+"                rotatedAnchors[i] = base * c + cross(grayAxis, base) * s + grayAxis * dotProd * (1 - c);\n" \
+"                strengths[i] = strength;\n" \
+"                cosFalloff[i] = cos(falloffDeg * PI / 180.0f); // Convert to radians\n" \
+"            }\n" \
+"            \n" \
+"            // Apply hue compression to RGB\n" \
+"            float3 color = rgb;\n" \
+"            float lum = dot(color, float3(0.2126, 0.7152, 0.0722));\n" \
+"            float3 chroma = color - lum;\n" \
+"            \n" \
+"            if (length(chroma) > 1e-3) {\n" \
+"                float3 chromaDir = normalize(chroma);\n" \
+"                float chromaMag = length(chroma);\n" \
+"                float3 bestDir = chromaDir;\n" \
+"                float bestStrength = 0.0;\n" \
+"                \n" \
+"                for (int i = 0; i < 6; ++i) {\n" \
+"                    float alignment = dot(chromaDir, normalize(rotatedAnchors[i]));\n" \
+"                    if (alignment > cosFalloff[i]) {\n" \
+"                        float coneFalloff = smoothstep(cosFalloff[i], 1.0, alignment);\n" \
+"                        float influence = coneFalloff * strengths[i];\n" \
+"                        if (influence > bestStrength) {\n" \
+"                            bestStrength = influence;\n" \
+"                            bestDir = mix(chromaDir, normalize(rotatedAnchors[i]), influence);\n" \
+"                        }\n" \
+"                    }\n" \
+"                }\n" \
+"                \n" \
+"                bestDir = normalize(bestDir);\n" \
+"                float3 finalColor = lum + bestDir * chromaMag;\n" \
+"                \n" \
+"                rgb.x = clamp(finalColor.x, 0.0, 1.0);\n" \
+"                rgb.y = clamp(finalColor.y, 0.0, 1.0);\n" \
+"                rgb.z = clamp(finalColor.z, 0.0, 1.0);\n" \
+"            }\n" \
+"        }\n" \
 "        \n" \
 "        // XYZ to P3 transform (hardcoded)\n" \
 "        float3x3 hardcodedxyzToP3Matrix = float3x3(\n" \
@@ -872,8 +963,7 @@ const char* kernelSource =  \
 "        --------------------------------------------------*/\n" \
 "        float ptm_sc = 1.0f;\n" \
 "        if (params.ptmPresetEnable || params.ptmUIEnable) {\n" \
-"            // Mid Purity Low\n" \
-"            float ptm_ach_d = complement_power(ach_d, params.ptmLowSt);\n" \
+"            // Mid Purity Low\n"            float ptm_ach_d = complement_power(ach_d, params.ptmLowSt);\n" \
 "            ptm_sc = sigmoid_cubic(ptm_ach_d, params.ptmLow*(1.0f - ts_pt));\n" \
 "            \n" \
 "            // Mid Purity High\n" \
